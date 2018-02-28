@@ -1,11 +1,12 @@
 import openpyxl
 from selenium import webdriver
-from selenium.webdriver.common.action_chains import ActionChains
 import datetime
 import traceback
 # traceback.print_exc()
 import time
 import os
+
+from selenium.common.exceptions import NoSuchElementException
 
 wb = openpyxl.load_workbook("test2.xlsx")
 sheet = wb["Sheet1"]
@@ -182,11 +183,39 @@ class WebsiteNavigator(object):
             driver.find_element_by_id("sin").clear()
             s.write_error("SIN", current_row)
 
+    def get_name(self):
+        return input("Enter username: ")
+
+    def get_pass(self):
+        return input("Enter password: ")
+
 
 p = ExcelParser()
 wn = WebsiteNavigator()
 
-wn.open_sail("xxx", "xxx", "xxx")
+wn.open_sail("xxx", wn.get_name(), wn.get_pass())
+print("Logging in....")
+
+while True:
+    try:
+        if driver.find_element_by_id("user"):
+            print("Incorrect credentials, try again...")
+            driver.find_element_by_id("user").send_keys(wn.get_name())
+            driver.find_element_by_id("password").send_keys(wn.get_pass())
+            time.sleep(1)
+            driver.find_element_by_name("btnSubmit").click()
+    except NoSuchElementException:
+        while True:
+            begin = input("Login successful. Begin final entry into SAIL? [y] or [n]")
+            if begin.upper() == "Y":
+                break
+            elif begin.upper() == "N":
+                print("Exiting...")
+                quit()
+            else:
+                print("Enter [y] or [n]")
+
+    break
 
 for r in range(2, sheet.max_row + 1):
     s = StudentInfo(p.parse_last_name(r), p.parse_sin(r), p.parse_end_month(r),
