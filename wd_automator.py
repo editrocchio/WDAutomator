@@ -1,5 +1,6 @@
 import openpyxl
 from selenium import webdriver
+from selenium.webdriver.common.action_chains import ActionChains
 import datetime
 import traceback
 # traceback.print_exc()
@@ -23,12 +24,12 @@ class ExcelParser(object):
     def parse_end_month(self, row):
         course_end_cell = sheet["Y" + str(row)].value
         course_end_cell = str(course_end_cell)[:10]
-        return datetime.datetime.strptime(course_end_cell, "%m/%d/%Y").month
+        return datetime.datetime.strptime(course_end_cell, "%Y-%m-%d").month
 
     def parse_end_year(self, row):
         course_end_cell = sheet["Y" + str(row)].value
         course_end_cell = str(course_end_cell)[:10]
-        return datetime.datetime.strptime(course_end_cell, "%m/%d/%Y").year
+        return datetime.datetime.strptime(course_end_cell, "%Y-%m-%d").year
 
     def parse_type(self, row):
         type_cell = sheet["AB" + str(row)]
@@ -37,7 +38,7 @@ class ExcelParser(object):
             return type_cell.value[0:2]
         else:
             print("Error, couldn't parse type")
-
+    # TODO: The following don't really work if the input isn't perfect, take out the slicing and make it so you put one option per cell
     # 1: Student did not successfully complete all funded courses. If student withdrew, provide end date.
     # 2: Student withdrew at end of first term (provide end date).
     # 3: Student successfully completed studies early (provide end date).
@@ -123,7 +124,6 @@ class StudentInfo(object):
               self.last_attended_date)
 
     def write_error(self, item, excel_row):
-        print("yeah")
         with open("errors.txt", 'a+') as f:
             f.write("\n" + item + " could not be verified on excel row " + str(excel_row))
 
@@ -150,41 +150,51 @@ class WebsiteNavigator(object):
         month_string = ""
 
         for string, num in months.items():
-            if end_month == num:
+            if end_month == str(num):
                 month_string = string
 
         container = driver.find_element_by_id("main_container")
         base_table = container.find_element_by_class_name("content")
 
-        if name.upper() not in str(base_table.find_element_by_xpath('//table[@class="border"]/tbody/tr[2]/td[2]').text):
-            s.write_error(name, current_row)
-            return
+        try:
+            if name.upper() not in str(base_table.find_element_by_xpath('//table[@class="border"]/tbody/tr[2]/td[2]').text):
+                s.write_error(name, current_row)
+                return
 
-        if end_year not in str(base_table.find_element_by_xpath('//table[@class="border"]/tbody/tr[2]/td[6]').text):
-            s.write_error("End date", current_row)
-            return
+            if end_year not in str(base_table.find_element_by_xpath('//table[@class="border"]/tbody/tr[2]/td[6]').text):
+                s.write_error("End date (year)", current_row)
+                return
 
-        if month_string not in str(base_table.find_element_by_xpath('//table[@class="border"]/tbody/tr[2]/td[6]').text):
-            s.write_error("End date,", current_row)
-            return
+            if month_string not in str(base_table.find_element_by_xpath('//table[@class="border"]/tbody/tr[2]/td[6]').text):
+                s.write_error("End date (month)", current_row)
+                return
 
-        if str(base_table.find_element_by_xpath('//table[@class="border"]/tbody/tr[2]/td[7]').text) != \
-                "Award Notice Sent":
-            s.write_error("App status", current_row)
-            return
+            if str(base_table.find_element_by_xpath('//table[@class="border"]/tbody/tr[2]/td[7]').text) != \
+                    "Award Notice Sent":
+                s.write_error("App status", current_row)
+                return
 
-        # if it makes it this far then all checks passed so file not needed TODO: FIx this part, always deletes with loop
-        os.remove("errors.txt")
+            # If it gets this far then all tests passed, move on to withdrawal reporting page
+            driver.find_element_by_xpath('//*[@title="Application Number"]').click()
+            driver.find_element_by_xpath('//ul[@class="sailTabs"]/li[6]//div[@class="greyRt"]').click()
+
+        except:
+            driver.find_element_by_id("sin").clear()
+            s.write_error("SIN", current_row)
 
 
 p = ExcelParser()
 wn = WebsiteNavigator()
 
-wn.open_sail("xxxxx", "xxxx", "xxxxxx")
-wn.enter_sin("xxx")
+wn.open_sail("xxx", "xxx", "xxx")
 
 for r in range(2, sheet.max_row + 1):
     s = StudentInfo(p.parse_last_name(r), p.parse_sin(r), p.parse_end_month(r),
                     p.parse_end_year(r), p.parse_type(r), p.parse_reason(r), p.parse_nonpunitive(r), p.parse_date(r))
 
+    wn.enter_sin(s.get_sin())
     wn.check_identity(s.get_last_name(), str(s.get_end_year()), str(s.get_end_month()), r)
+
+# Delete unnecessary error file if none exist
+if os.path.exists("/errors.txt") and os.path.getsize("/errors.txt") > 0:
+    os.remove("errors.txt")
