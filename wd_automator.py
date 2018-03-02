@@ -4,8 +4,9 @@ from selenium.webdriver.support.ui import Select
 import datetime
 import time
 import os
-
+import getpass
 from selenium.common.exceptions import NoSuchElementException
+from selenium.common.exceptions import ElementNotInteractableException
 
 wb = openpyxl.load_workbook("test2.xlsx")
 sheet = wb["Sheet1"]
@@ -160,7 +161,7 @@ class WebsiteNavigator(object):
                 s.write_error("App status", current_row)
                 return
 
-            # If it gets this far then all tests passed, move on to withdrawal reporting page
+            # If it gets this far then all tests passed, move on to reporting the withdrawal
             wn.enter_withdrawal_info(current_row)
 
         # Throws exception if SIN didn't work, clear the box and write error
@@ -172,14 +173,20 @@ class WebsiteNavigator(object):
         driver.find_element_by_xpath('//*[@title="Application Number"]').click()
         driver.find_element_by_xpath('//ul[@class="sailTabs"]/li[6]//div[@class="greyRt"]').click()
 
-        if s.get_wd_type().upper() == "WD":
+        if s.get_wd_type() is not None and s.get_wd_type().upper() == "WD":
             driver.find_element_by_id("withdrawalForm_withdrawalBean_withdrawalTypeId790").click()
-        elif s.get_wd_type().upper() == "EC":
+        elif s.get_wd_type() is not None and s.get_wd_type().upper() == "EC":
             driver.find_element_by_id("withdrawalForm_withdrawalBean_withdrawalTypeId791").click()
-        elif s.get_wd_type().upper() == "UC":
+        elif s.get_wd_type() is not None and s.get_wd_type().upper() == "UC":
             driver.find_element_by_id("withdrawalForm_withdrawalBean_withdrawalTypeId792").click()
         else:
             s.write_error("Type of withdrawal", row)
+            try:
+                driver.find_element_by_link_text("Search Applications").click()
+            except ElementNotInteractableException:
+                driver.find_element_by_link_text("Search").click()
+                driver.find_element_by_link_text("Search Applications").click()
+            return
 
         if s.get_reason() == 1:
             driver.find_element_by_id("withdrawalForm_withdrawalBean_withdrawalReasonId793").click()
@@ -191,6 +198,12 @@ class WebsiteNavigator(object):
             driver.find_element_by_id("withdrawalForm_withdrawalBean_withdrawalReasonId796").click()
         else:
             s.write_error("Reason for withdrawal", row)
+            try:
+                driver.find_element_by_link_text("Search Applications").click()
+            except ElementNotInteractableException:
+                driver.find_element_by_link_text("Search").click()
+                driver.find_element_by_link_text("Search Applications").click()
+            return
 
         # Remaining entries are optional, so no error reporting if they don't exist
         if s.get_nonpunitive():
@@ -212,7 +225,7 @@ class WebsiteNavigator(object):
         return input("Enter username: ")
 
     def get_pass(self):
-        return input("Enter password: ")
+        return getpass.getpass()
 
 
 p = ExcelParser()
